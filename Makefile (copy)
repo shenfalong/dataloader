@@ -1,0 +1,40 @@
+CUDA_DIR := /mnt/WXRC0020/users/shenfalong/shen/thirdparty/cuda/cuda-10.1/
+
+CUDA_ARCH := -gencode arch=compute_75,code=sm_75 -gencode arch=compute_75,code=compute_75 \
+			 -gencode arch=compute_70,code=sm_70 -gencode arch=compute_70,code=compute_70 \
+			 -gencode arch=compute_61,code=sm_61 -gencode arch=compute_61,code=compute_61 \
+			 -gencode arch=compute_60,code=sm_60 -gencode arch=compute_60,code=compute_60 
+
+NVCCFLAGS := -ccbin=g++ -m64 -Xcompiler -fPIC -Xcompiler  -fopenmp -Xcompiler -fPIC -std=c++11 $(CUDA_ARCH)
+
+LDFLAGS := -lgomp -lpthread
+CXXFLAGS := -Wno-unused-result -Wsign-compare -DNDEBUG -g -fwrapv -Wall -O2 -std=c++11 -MMD -MP -fPIC -fopenmp -Wl,--dynamic-linker=/lib64/ld-linux-x86-64.so.2
+#CXXFLAGS := -DDEBUG -O0 -g -std=c++11 -MMD -MP -fPIC -fopenmp -Wl,--dynamic-linker=/lib64/ld-linux-x86-64.so.2
+
+OPENCV_INCLUDE := -I/mnt/WXRC0020/users/shenfalong/shen/thirdparty/opencv249/include
+OPENCV_LIBS := -L/mnt/WXRC0020/users/shenfalong/shen/thirdparty/opencv249/lib -lopencv_core -lopencv_highgui -lopencv_imgproc
+
+.PHONY: all clean
+
+all: _pydb.so 
+	@ echo successfully compiled
+	rm -rf *.d
+
+_pydb.so: src/_pydb.cpp build/db.o src/kernel.cu
+	g++ $(CXXFLAGS) -shared -Iinclude/ src/_pydb.cpp build/db.o build/kernel.cuo \
+		-I/mnt/WXRC0020/users/shenfalong/shen/.local/include/python3.7/ -I/mnt/WXRC0020/users/shenfalong/shen/.local/lib/python3.7/site-packages/numpy/core/include \
+		-L/mnt/WXRC0020/users/shenfalong/shen/.local/lib -lpython3.7m \
+		$(OPENCV_LIBS) $(OPENCV_INCLUDE) \
+		-lopencv_core -lopencv_highgui -lopencv_imgproc \
+		-L$(CUDA_DIR)/lib64 \
+		-lcudart -lcublas -lcurand \
+		-I/mnt/WXRC0020/users/shenfalong/shen/.local/lib/python3.7/site-packages/pybind11/include \
+		-o _pydb.so $(LDFLAGS)
+
+build/db.o: src/db.cpp src/kernel.cu include/db.hpp include/thread_pool.hpp
+	nvcc $(NVCCFLAGS) -I$(CUDA_DIR)/include -c src/kernel.cu -o build/kernel.cuo
+	g++ $(CXXFLAGS) -c -Iinclude/ src/db.cpp -o build/db.o
+	
+clean:
+	rm -rf build/*
+	rm -rf *.so
